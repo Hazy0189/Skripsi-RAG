@@ -24,13 +24,13 @@ COLLECTION_NAME_V2 = "corporate_assets_v2"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 def ingest_to_chromadb():
-    print("⏳ Memulai proses data ingestion ke ChromaDB...")
+    print("Memulai proses data ingestion ke ChromaDB...")
 
     try:
         df = pd.read_csv(CSV_FILE)
-        print(f"✅ Berhasil membaca {len(df)} baris data dari {CSV_FILE}")
+        print(f"Berhasil membaca {len(df)} baris data dari {CSV_FILE}")
     except FileNotFoundError:
-        print(f"❌ Error: File {CSV_FILE} tidak ditemukan. Pastikan file ada di folder yang sama.")
+        print(f"Error: File {CSV_FILE} tidak ditemukan.")
         return
 
     documents = []
@@ -49,10 +49,10 @@ def ingest_to_chromadb():
         doc = Document(page_content=page_content, metadata=metadata)
         documents.append(doc)
 
-    print("⏳ Mengunduh/Memuat model embedding (HuggingFace all-MiniLM-L6-v2)...")
+    print("Mengunduh/Memuat model embedding (HuggingFace all-MiniLM-L6-v2)...")
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-    print(f"⏳ Menyimpan vektor ke direktori {CHROMA_PERSIST_DIR}...")
+    print(f"Menyimpan vektor ke direktori {CHROMA_PERSIST_DIR}...")
     vector_store = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
@@ -60,7 +60,7 @@ def ingest_to_chromadb():
         persist_directory=CHROMA_PERSIST_DIR
     )
 
-    print("✅ Ingestion selesai! Database RAG Anda sudah siap.")
+    print("Ingestion selesai.")
     return vector_store
 
 def _clean_v2_value(value: Any) -> str:
@@ -199,27 +199,6 @@ def ingest_orion_package(directory, persist_directory=CHROMA_PERSIST_DIR, embedd
     return asset_store, context_store, package["summary"]
 
 
-def test_retrieval():
-    print("\n🔍 Mari kita tes mesin pencari RAG kita...")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vector_store = Chroma(
-        collection_name=COLLECTION_NAME,
-        persist_directory=CHROMA_PERSIST_DIR,
-        embedding_function=embeddings
-    )
-
-    query = "Server database untuk transaksi keuangan kartu kredit"
-    print(f"Query User: '{query}'")
-
-    results = vector_store.similarity_search(query, k=1)
-
-    if results:
-        print("\n🎯 HASIL PENCARIAN TERATAS:")
-        print(f"ID Aset     : {results[0].metadata['asset_id']}")
-        print(f"Nama Aset   : {results[0].metadata['asset_name']}")
-        print(f"Konteks RAG : {results[0].metadata}")
-    else:
-        print("❌ Tidak ada aset yang cocok.")
 
 def build_context_documents(
     record: Mapping[str, Any], chunk_size: int = 1600, chunk_overlap: int = 200,

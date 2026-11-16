@@ -1,4 +1,4 @@
-"""Deterministic organizational remediation priority (Phase C).
+"""Deterministic organizational remediation priority.
 
 Computes Organizational Priority (P1–P4) for a vulnerability affecting a
 specific asset. The module is intentionally separate from CVSS scoring:

@@ -1,4 +1,4 @@
-"""Targeted checks for the deterministic Organizational Priority rubric (Phase 2C).
+"""Legacy priority baseline weights and classification rules.
 
 Covers: high-criticality assets, internet-exposed assets, low-criticality
 internal assets, missing/unknown metadata (explicit incomplete state),
@@ -6,13 +6,13 @@ conflicting evidence, reproducibility, backward compatibility with v1-style
 metadata, and rubric design invariants (severity cap, score consistency).
 
 No live API calls, no LLM, no ChromaDB - the rubric is a pure function.
-Run: python -m pytest test_priority_rubric.py -q
+Run: python -m pytest tests/test_legacy_priority_rubric.py -q
 """
 
 import pytest
 
 from skripsi_rag.asset_schema_v2 import load_assets
-from skripsi_rag.priority_rubric import (
+from skripsi_rag.legacy_priority_rubric import (
     MAX_SCORE,
     PRIORITY_LEVELS,
     calculate_organizational_priority,

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from streamlit.testing.v1 import AppTest
 from test_va_import import csv_bytes, finding
 
@@ -129,7 +130,7 @@ def _patch_streamlit_dependencies(monkeypatch):
     monkeypatch.setattr(langchain_chroma, "Chroma", _FakeVectorStore)
     monkeypatch.setattr(langchain_huggingface, "HuggingFaceEmbeddings", _FakeEmbeddings)
     history = []
-    monkeypatch.setattr(assessment_history, "load_history", lambda: list(history))
+    monkeypatch.setattr(assessment_history, "load_history", lambda **kwargs: list(history))
     monkeypatch.setattr(assessment_history, "save_assessment", history.append)
     monkeypatch.setattr(assessment_history, "delete_record", lambda record: history.remove(record))
     _FakeVectorStore.instances = {}
@@ -203,6 +204,23 @@ def test_asset_edit_persists_metadata_without_changing_stable_id(monkeypatch):
     stored = _FakeVectorStore.last_instance.records["SRV-002"]
     assert stored["asset_name"] == "Edited Portal"
     assert stored["asset_id"] == "SRV-002"
+
+
+@pytest.mark.parametrize("inventory", ['{"unreadable inventory":', '[{"cpe":"unknown"}]'])
+def test_metadata_edit_preserves_inventory_that_cannot_be_edited(monkeypatch, inventory):
+    monkeypatch.setitem(ASSETS[1], "software_inventory_json", inventory)
+    monkeypatch.setitem(ASSETS[1], "cpe", "unknown")
+    app = _app_test(monkeypatch, "Asset Inventory").run(timeout=60)
+    app.selectbox(key="inventory_asset_select").select("SRV-002").run(timeout=60)
+    assert any("Software inventory could not be loaded" in error.value for error in app.error)
+    assert not any(button.key == "sw_save_SRV-002" for button in app.button)
+    app.text_input(key="am_name_SRV-002").set_value("Edited without replacing inventory")
+    next(button for button in app.button if button.label == "Save changes").click().run(timeout=60)
+    assert not app.exception
+    stored = _FakeVectorStore.instances["corporate_assets_v2"].records["SRV-002"]
+    assert stored["asset_name"] == "Edited without replacing inventory"
+    assert stored["software_inventory_json"] == inventory
+    assert stored["cpe"] == "unknown"
 
 
 def test_inventory_analysis_action_preselects_stable_asset_id(monkeypatch):
@@ -536,3 +554,37 @@ def test_history_table_separates_priority_applicability_and_supports_delete(monk
     next(button for button in app.button if button.label == "Delete").click().run(timeout=60)
     assert not app.exception
     assert not history
+
+
+def test_history_read_failure_is_visible_instead_of_an_empty_state(monkeypatch):
+    from skripsi_rag import assessment_history
+
+    app = _app_test(monkeypatch, "Analysis History")
+
+    def fail_read(**kwargs):
+        raise assessment_history.HistoryReadError("Synthetic invalid history")
+
+    monkeypatch.setattr(assessment_history, "load_history", fail_read)
+    app.run(timeout=60)
+    assert not app.exception
+    assert any("History could not be loaded" in error.value for error in app.error)
+    assert not any("No assessments recorded" in info.value for info in app.info)
+
+
+def test_history_delete_failure_keeps_the_record_and_shows_feedback(monkeypatch):
+    from skripsi_rag import assessment_history
+
+    app, _, history = _ready_analysis(monkeypatch)
+    _submit_analysis(app)
+    app.button(key="save_analysis").click().run(timeout=60)
+    app.radio[0].set_value("Analysis History").run(timeout=60)
+
+    def fail_delete(record):
+        raise OSError("Synthetic file write failure")
+
+    monkeypatch.setattr(assessment_history, "delete_record", fail_delete)
+    app.run(timeout=60)
+    next(button for button in app.button if button.label == "Delete").click().run(timeout=60)
+    assert not app.exception
+    assert len(history) == 1
+    assert any("History delete failed" in error.value for error in app.error)

@@ -1,4 +1,4 @@
-"""Targeted checks for the Phase 2B pipeline switch to Asset Schema v2.
+"""Schema v2 asset context across ingestion, retrieval and model boundaries.
 
 Covers: the Streamlit app loads the corporate_assets_v2 collection with the
 ingested v2 assets, retrieval context exposes the full v2 evidence (while
@@ -8,7 +8,7 @@ ingestion. No live LLM/NVD calls are made.
 
 The app loader is inspected via AST, never imported in bare Streamlit mode.
 Integration stores are ingested under tmp_path with dummy embeddings. Run:
-python -m pytest test_pipeline_v2.py -q
+python -m pytest tests/test_asset_context_integration.py -q
 """
 
 import ast

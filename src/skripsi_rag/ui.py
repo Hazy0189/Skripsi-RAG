@@ -26,6 +26,7 @@ from skripsi_rag.asset_inventory import (
     save_software_inventory,
 )
 from skripsi_rag.assessment_history import (
+    HistoryReadError,
     delete_record,
     load_history,
     save_assessment,
@@ -266,6 +267,77 @@ with st.sidebar:
 st.html(APP_LAYOUT_STYLES)
 
 
+def _render_software_inventory(asset: dict, selected_id: str):
+    st.markdown("**Installed software records**")
+    st.caption("Add software products installed on this asset. Each record may include a valid CPE 2.3 URI for applicability matching.")
+    try:
+        software = load_software_inventory(asset, strict=True)
+        if any(not isinstance(record.get("name"), str) or not record["name"].strip() for record in software):
+            raise ValueError("Software inventory contains a record without a software name.")
+    except ValueError as exc:
+        st.error(f"Software inventory could not be loaded: {exc}")
+        st.caption("Repair the inventory source before editing software records. Metadata edits preserve the stored inventory.")
+        return
+    df_data = [
+        {"name": r.get("name", ""), "version": r.get("version", ""), "cpe": r.get("cpe", "")}
+        for r in software
+    ] if software else [{"name": "", "version": "", "cpe": ""}]
+
+    edited = st.data_editor(
+        df_data,
+        num_rows="dynamic",
+        column_config={
+            "name": st.column_config.TextColumn("Software name", required=True),
+            "version": st.column_config.TextColumn("Version"),
+            "cpe": st.column_config.TextColumn("CPE 2.3 URI", help="e.g. cpe:2.3:a:apache:log4j:2.14.1:*:*:*:*:*:*:*"),
+        },
+        hide_index=True,
+        key=f"sw_editor_{selected_id}",
+    )
+    verified_inventory = st.checkbox(
+        "I verified this is the complete installed-product inventory for this asset.",
+        value=inventory_is_verified(asset), key=f"sw_verified_{selected_id}",
+        help="Without explicit completeness verification, an absent product remains Unknown rather than Not Applicable.",
+    )
+
+    if st.button("Save software inventory", icon=":material/save:", key=f"sw_save_{selected_id}"):
+        cleaned = []
+        errors = []
+        for idx, row in enumerate(edited):
+            name = str(row.get("name") or "").strip()
+            cpe = str(row.get("cpe") or "").strip()
+            if not name:
+                continue
+            if cpe and cpe != "unknown" and not is_valid_cpe(cpe):
+                errors.append(f"Row {idx + 1}: invalid CPE '{cpe}'")
+            if verified_inventory and not is_valid_cpe(cpe):
+                errors.append(f"Row {idx + 1}: complete verified inventory requires a valid CPE for each software record.")
+            original = next((item for item in software if item.get("name") == name
+                and item.get("version", "") == str(row.get("version") or "").strip()
+                and item.get("cpe", "") == cpe), {})
+            cleaned.append({
+                **original,
+                "name": name,
+                "version": str(row.get("version") or "").strip(),
+                "cpe": cpe,
+            })
+        if errors:
+            for err in errors:
+                st.error(err)
+        elif not vector_store:
+            st.error("ChromaDB is not ready; cannot save changes.")
+        else:
+            updates = {SOFTWARE_INVENTORY_FIELD: save_software_inventory(cleaned),
+                       "inventory_verified": "true" if verified_inventory else "false"}
+            if update_asset_metadata(vector_store, selected_id, updates):
+                load_all_assets_metadata.clear()
+                st.success("Software inventory saved.")
+                st.rerun()
+            else:
+                st.error("Failed to update software inventory in ChromaDB.")
+
+
+
 def _render_asset_detail(assets: list[dict]):
     """Right-hand asset detail editor for the Asset Inventory page."""
     selected_id = st.session_state.inventory_selected_asset_id
@@ -354,14 +426,12 @@ def _render_asset_detail(assets: list[dict]):
             }
             if e_cpe != asset.get("cpe", ""):
                 updates["inventory_verified"] = "false"
-            if e_cpe and not is_valid_cpe(e_cpe):
+            if e_cpe not in ("", "unknown") and not is_valid_cpe(e_cpe):
                 st.error(f"Primary CPE is not a valid CPE 2.3 URI: {e_cpe}")
             elif not vector_store:
                 st.error("ChromaDB is not ready; cannot save changes.")
             else:
                 # Metadata edits must not replace software managed in the other tab.
-                existing_inventory = load_software_inventory(asset)
-                updates[SOFTWARE_INVENTORY_FIELD] = save_software_inventory(existing_inventory)
                 if update_asset_metadata(vector_store, selected_id, updates):
                     load_all_assets_metadata.clear()
                     st.success("Asset updated. Changes are reflected immediately in retrieval and analysis.")
@@ -373,66 +443,7 @@ def _render_asset_detail(assets: list[dict]):
             st.json(asset)
 
     with tab_software:
-        st.markdown("**Installed software records**")
-        st.caption("Add software products installed on this asset. Each record may include a valid CPE 2.3 URI for applicability matching.")
-        software = load_software_inventory(asset)
-        df_data = [
-            {"name": r.get("name", ""), "version": r.get("version", ""), "cpe": r.get("cpe", "")}
-            for r in software
-        ] if software else [{"name": "", "version": "", "cpe": ""}]
-
-        edited = st.data_editor(
-            df_data,
-            num_rows="dynamic",
-            column_config={
-                "name": st.column_config.TextColumn("Software name", required=True),
-                "version": st.column_config.TextColumn("Version"),
-                "cpe": st.column_config.TextColumn("CPE 2.3 URI", help="e.g. cpe:2.3:a:apache:log4j:2.14.1:*:*:*:*:*:*:*"),
-            },
-            hide_index=True,
-            key=f"sw_editor_{selected_id}",
-        )
-        verified_inventory = st.checkbox(
-            "I verified this is the complete installed-product inventory for this asset.",
-            value=inventory_is_verified(asset), key=f"sw_verified_{selected_id}",
-            help="Without explicit completeness verification, an absent product remains Unknown rather than Not Applicable.",
-        )
-
-        if st.button("Save software inventory", icon=":material/save:", key=f"sw_save_{selected_id}"):
-            cleaned = []
-            errors = []
-            for idx, row in enumerate(edited):
-                name = str(row.get("name") or "").strip()
-                cpe = str(row.get("cpe") or "").strip()
-                if not name:
-                    continue
-                if cpe and cpe != "unknown" and not is_valid_cpe(cpe):
-                    errors.append(f"Row {idx + 1}: invalid CPE '{cpe}'")
-                if verified_inventory and not is_valid_cpe(cpe):
-                    errors.append(f"Row {idx + 1}: complete verified inventory requires a valid CPE for each software record.")
-                original = next((item for item in software if item.get("name") == name
-                    and item.get("version", "") == str(row.get("version") or "").strip()
-                    and item.get("cpe", "") == cpe), {})
-                cleaned.append({
-                    **original,
-                    "name": name,
-                    "version": str(row.get("version") or "").strip(),
-                    "cpe": cpe,
-                })
-            if errors:
-                for err in errors:
-                    st.error(err)
-            elif not vector_store:
-                st.error("ChromaDB is not ready; cannot save changes.")
-            else:
-                updates = {SOFTWARE_INVENTORY_FIELD: save_software_inventory(cleaned),
-                           "inventory_verified": "true" if verified_inventory else "false"}
-                if update_asset_metadata(vector_store, selected_id, updates):
-                    load_all_assets_metadata.clear()
-                    st.success("Software inventory saved.")
-                    st.rerun()
-                else:
-                    st.error("Failed to update software inventory in ChromaDB.")
+        _render_software_inventory(asset, selected_id)
 
     with st.container(horizontal=True):
         if st.button("Analyze vulnerability", icon=":material/biotech:", key=f"analyze_detail_{selected_id}", type="primary"):
@@ -869,7 +880,11 @@ def _render_analysis_history():
     st.header(":material/history: Analysis History")
     st.caption("View previous vulnerability assessments.")
 
-    history = load_history()
+    try:
+        history = load_history(strict=True)
+    except HistoryReadError as exc:
+        st.error(f"History could not be loaded: {exc}")
+        return
     if not history:
         st.info("No assessments recorded yet. Results can be saved from the Vulnerability Analysis page after a successful analysis.")
         return
@@ -886,7 +901,7 @@ def _render_analysis_history():
     ])
     st.dataframe(history_table, hide_index=True, width="stretch")
     st.download_button("Export history (JSON)", data=json.dumps([asdict(record) for record in history], indent=2),
-                       file_name="skripsi_rag.assessment_history.json", mime="application/json", key="export_history")
+                       file_name="assessment_history.json", mime="application/json", key="export_history")
     ordered = list(reversed(history))
     if st.session_state.get("history_selected", 0) not in range(len(ordered)):
         del st.session_state["history_selected"]
@@ -903,15 +918,18 @@ def _render_analysis_history():
                 st.badge(str(record.priority) if record.priority else "No remediation priority", color="blue")
             with c3:
                 if st.button("Delete", key=f"del_hist_{idx}"):
-                    delete_record(record)
-                    remaining = load_history()
-                    still_present = any(item.id == record.id for item in remaining) if record.id else any(
-                        asdict(item) == asdict(record) for item in remaining
-                    )
-                    if still_present:
-                        st.error("History deletion could not be verified.")
-                    else:
-                        st.rerun()
+                    try:
+                        delete_record(record)
+                        remaining = load_history(strict=True)
+                        still_present = any(item.id == record.id for item in remaining) if record.id else any(
+                            asdict(item) == asdict(record) for item in remaining
+                        )
+                        if still_present:
+                            st.error("History deletion could not be verified.")
+                        else:
+                            st.rerun()
+                    except (HistoryReadError, OSError) as exc:
+                        st.error(f"History delete failed: {exc}")
 
             with st.expander("Details"):
                 col_a, col_b, col_c = st.columns(3)
@@ -949,8 +967,9 @@ def _render_analysis_history():
                 st.code(record.vector_string, language="text")
                 st.markdown("**Environmental vector:**")
                 st.code(record.modified_vector, language="text")
-                st.markdown("**Retrieval confidence:**")
+                st.markdown("**Retrieval relevance:**")
                 st.write(record.retrieval_confidence)
+                st.caption("Similarity score, not a calibrated probability.")
                 if record.evidence and record.evidence.get("llm_justification"):
                     st.markdown("**LLM justification:**")
                     st.info(record.evidence["llm_justification"])

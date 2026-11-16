@@ -1,4 +1,4 @@
-"""Targeted checks for Asset Knowledge Base Schema v2 (Phase 1).
+"""Asset Schema v2 validation and synthetic-inventory migration checks.
 
 Covers: v2 CSV validates cleanly, seven original assets retained, v1 fields
 migrated byte-identical, unknown values not fabricated, evidence-based
@@ -6,7 +6,7 @@ sample values, and validator error reporting (missing required field, bad
 enum, bad CVSS requirement code, duplicate asset_id, bad header).
 
 No ChromaDB or pipeline files are touched. Run:
-python -m pytest test_asset_schema_v2.py -q
+python -m pytest tests/test_asset_schema_v2.py -q
 """
 
 import csv

@@ -1,9 +1,9 @@
-"""Targeted checks for the editable Asset Inventory (Phase B1).
+"""Software inventory serialization, validation and Chroma persistence checks.
 
 Covers: software inventory serialization, CPE validation, CPE collection from
 legacy + inventory fields, and ChromaDB metadata update/persistence.
 Integration tests ingest fresh temporary collections with dummy embeddings.
-Run: python -m pytest test_asset_inventory.py -q
+Run: python -m pytest tests/test_asset_inventory.py -q
 """
 
 from pathlib import Path
@@ -45,6 +45,18 @@ def test_save_and_load_software_inventory_round_trip():
 
 def test_load_software_inventory_skips_malformed_json():
     assert load_software_inventory({SOFTWARE_INVENTORY_FIELD: "not-json"}) == []
+
+
+@pytest.mark.parametrize("raw", ["not-json", "{}", '[{"name":"valid"}, null]', 7])
+def test_strict_inventory_loading_rejects_discarded_data(raw):
+    with pytest.raises(ValueError, match="Software inventory"):
+        load_software_inventory({SOFTWARE_INVENTORY_FIELD: raw}, strict=True)
+
+
+def test_strict_inventory_loading_preserves_unknown_fields():
+    record = {"name": "PostgreSQL", "version": "16", "cpe": "unknown", "source_reference": "Synthetic source"}
+    asset = {SOFTWARE_INVENTORY_FIELD: save_software_inventory([record])}
+    assert load_software_inventory(asset, strict=True) == [record]
 
 
 def test_is_valid_cpe_accepts_cpe_2_3():

@@ -77,8 +77,8 @@ pyproject.toml, uv.lock   Python package configuration and dependency lock
 The `skripsi_rag` package contains `ui.py`, `pipeline.py`, `nvd_client.py`,
 `llm_assessment.py`, `rag_retrieval.py`, `cvss_engine.py`, the active
 `organizational_priority.py` rubric, asset/schema/ingestion helpers, VA import and
-batch helpers, and history persistence. `priority_rubric.py` remains a legacy
-reference; it is not the active application policy.
+batch helpers, and history persistence. `legacy_priority_rubric.py` contains the
+older policy used for baseline comparisons.
 
 ## Documentation
 

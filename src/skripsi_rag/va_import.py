@@ -79,8 +79,10 @@ def parse_acunetix_csv(content: bytes, filename: str = "report.csv") -> dict:
             }
             findings.append(finding)
             warnings.extend(f"Row {row_number}: {issue}" for issue in issues)
-    except (csv.Error, StopIteration) as exc:
-        raise ValueError("CSV is empty or has malformed quoting.") from exc
+    except StopIteration as exc:
+        raise ValueError("CSV contains no header row.") from exc
+    except csv.Error as exc:
+        raise ValueError(f"CSV parsing failed: {exc}") from exc
     if not findings:
         raise ValueError("CSV contains no findings.")
     return {"report_id": report_id, "filename": filename, "source": "Acunetix CSV",

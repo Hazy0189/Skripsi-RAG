@@ -1,12 +1,7 @@
-"""Asset Knowledge Base Schema v2 validator (Phase 1).
+"""Validate the ordered Asset Schema v2 CSV format without opening a database.
 
-Validates rows of `data/examples/asset_data_v2.csv` against the Schema v2 defined in
-`docs/ASSET_SCHEMA_V2.md`. Stdlib-only (csv module) so no new dependency is
-introduced. Kept separate from Streamlit/ingestion so it can be reused by
-evaluation scripts.
-
-Run: python -m skripsi_rag.asset_schema_v2            # validate data/examples/asset_data_v2.csv
-     python -m skripsi_rag.asset_schema_v2 <path>     # validate another CSV file
+See docs/ASSET_SCHEMA_V2.md. Run `python -m skripsi_rag.asset_schema_v2 [path]`;
+the default input is data/examples/asset_data_v2.csv.
 """
 
 import csv

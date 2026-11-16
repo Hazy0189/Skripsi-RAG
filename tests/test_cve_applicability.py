@@ -1,10 +1,10 @@
-"""Hardened tests for CVE applicability matching (Phase A.1).
+"""CPE matching, version boundaries and three-valued NVD applicability checks.
 
 Covers: version-range boundaries (inclusive/exclusive), mixed AND/OR logic,
 nested child nodes, negate flags, multiple installed CPEs, missing/unknown
 inventory, unsupported version schemes, false-positive prevention, and
 backward compatibility.
-Run: python -m pytest test_cve_applicability.py -q
+Run: python -m pytest tests/test_cve_applicability.py -q
 """
 
 import pytest

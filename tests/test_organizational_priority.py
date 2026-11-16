@@ -1,9 +1,9 @@
-"""Targeted checks for the deterministic Organizational Priority engine (Phase C).
+"""Active organizational priority rules and evidence handling.
 
 Covers: severity bands, business criticality, exposure, CPE applicability,
 inactive graph inputs, missing evidence handling, applicability gating,
 reproducibility, and separation from CVSS severity.
-Run: python -m pytest test_organizational_priority.py -q
+Run: python -m pytest tests/test_organizational_priority.py -q
 """
 
 from dataclasses import asdict

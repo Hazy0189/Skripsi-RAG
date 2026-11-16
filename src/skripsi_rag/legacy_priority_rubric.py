@@ -1,64 +1,22 @@
-"""LEGACY / BASELINE ONLY — Phase 2C priority rubric (inactive).
+"""Legacy priority policy for baseline comparisons, without a CPE applicability gate.
 
-The active application policy is organizational_priority.py, documented in
-docs/PRIORITY_RUBRIC.md. This historical implementation is retained solely
-for baseline comparisons and compatibility; its weights/thresholds and
-missing-evidence gates MUST NOT be described as the active algorithm.
-The policy below describes the legacy baseline only.
+Use organizational_priority.py for active remediation decisions. This baseline
+bands an existing NVD score and does not calculate CVSS or change its vector.
 
-Deterministic organizational remediation-priority rubric (Phase 2C).
+Policy points (maximum 100):
+- Severity: Critical 35, High 27, Medium 14, Low 4.
+- Business criticality: Mission Critical 30, High 22, Medium 11, Low 3.
+- Exposure: explicit internet exposure 20, derived DMZ exposure 12,
+  internal/restricted exposure 0.
+- Sensitivity: Restricted 8, Confidential 5, Internal 2, Public 0.
+- Production environment: 5.
+- Any declared high CIA baseline: 2.
 
-Computes Organizational Priority (P1-P4) from verified evidence only:
-- Organizational asset context (Asset Schema v2 fields retrieved via RAG).
-- The NVD CVSS v3.1 base score (technical baseline; banding only - the CVSS
-  formulas themselves are never modified or recomputed here).
-
-This is intentionally SEPARATE from CVSS Base/Threat/Environmental scoring:
-CVSS severity answers "how technically severe is the vulnerability", while
-this rubric answers "in what order should THIS organization remediate it",
-combining technical severity with asset criticality, exposure, data
-sensitivity, environment, and declared CIA baselines.
-
-Responsibility boundary (do not blur):
-- The rubric NEVER modifies a CVSS vector or score (see app.build_environmental_vector
-  and the `cvss` library for that).
-- The rubric NEVER invents missing attributes: unknown/absent evidence is
-  surfaced explicitly (`unknown_factors`) and, when a required factor is
-  unknown, the result is an explicit incomplete state (priority=None,
-  status="incomplete") instead of a silently low priority.
-- The LLM's organizational_priority (llm_assessment.ContextualAssessment) is
-  preserved unchanged as a model suggestion; this module is the deterministic
-  counterpart used for reproducible/defensible results and later evaluation.
-
-Legacy rubric (max 100 points; not the active documented policy):
-
-  Factor                  Points                              Kind
-  ----------------------  ----------------------------------  --------
-  vulnerability_severity  Critical=35 High=27 Medium=14 Low=4 required
-  business_criticality    MissionCritical=30 High=22         required
-                          Medium=11 Low=3
-  exposure                internet yes=20; zone DMZ=12;      required
-                          internal/restricted=0
-  data_sensitivity        Restricted=8 Confidential=5        optional
-                          Internal=2 Public=0
-  environment             production=5 (staging/dev=0)       optional
-  cia_baseline            any declared CR/IR/AR = H -> 2     optional
-
-  Thresholds: P1 >= 70 | P2 >= 50 | P3 >= 30 | P4 < 30
-
-Design properties (tested):
-- vulnerability_severity is capped at 35 (< 50% of max): a vulnerability can
-  never reach P1 on technical severity alone; P1 requires organizational
-  co-evidence (e.g. Mission Critical + Restricted data, or High criticality
-  + internet exposure).
-- A Low-severity vulnerability can never exceed P2 even on the highest-stakes
-  asset (max 4+30+20+8+5+2 = 69 < 70).
-- Conflicting evidence (e.g. internet_exposed=yes on an Internal zone) never
-  silently downgrades risk: the higher-risk interpretation is used and the
-  conflict is recorded.
-
-Stdlib-only (like asset_schema_v2.py) so the rubric is reusable by evaluation
-scripts and testable without Streamlit/LLM/ChromaDB dependencies.
+Thresholds are P1 >= 70, P2 >= 50, P3 >= 30, otherwise P4. Missing required
+factors produce an incomplete result; unknown optional factors are disclosed.
+Explicit exposure overrides a conflicting network zone and records the conflict.
+A Low-severity finding cannot exceed P2 under these weights. These are research
+baseline rules, not an expert-validated organizational policy.
 """
 
 from dataclasses import dataclass

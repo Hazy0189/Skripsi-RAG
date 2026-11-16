@@ -5,7 +5,7 @@ Base metric preservation, absence of MAV, deterministic Environmental
 vector construction, and CVSS3 parsing of the generated vector.
 
 No live API calls are made - analyze_with_llm's LLM call is mocked.
-Run: python -m pytest test_contextual_assessment.py -q
+Run: python -m pytest tests/test_contextual_assessment.py -q
 """
 
 from unittest.mock import patch

@@ -87,3 +87,43 @@ def test_shared_assessment_history_preserves_all_endpoint_occurrences():
     record = case_history_record(batch, batch["cases"][0], ASSETS["A"])
     assert len(record.evidence["scanner_occurrences"]) == 2
     assert record.provenance["report_sha256"] == report["report_id"]
+
+
+@pytest.mark.parametrize("response", [None, {"secret": "audit-secret"}, ([], "ok"),
+                                     ({**NVD, "cve_id": "CVE-2024-9999"}, "ok")])
+def test_invalid_nvd_response_does_not_stop_later_findings(response):
+    report = parse_acunetix_csv(csv_bytes([finding(), finding(CVEList="CVE-2024-5678")]))
+    assessor = Mock(return_value={"status": "needs_verification"})
+    batch = run_va_batch(report, {finding()["Target"]: "A"}, ASSETS, cloud_consent=True,
+        fetcher=lambda cve: response if cve == NVD["cve_id"] else ({**NVD, "cve_id": cve}, "ok"),
+        assessor=assessor)
+    assert [case["status"] for case in batch["cases"]] == ["nvd_unavailable", "needs_verification"]
+    assert batch["cases"][0]["failures"][0]["stage"] == "nvd"
+    assert "nvd:" in batch_rows(batch)[0]["Issues"]
+    assert "audit-secret" not in str(batch)
+    assert assessor.call_count == 1
+
+
+@pytest.mark.parametrize("response", [None, {}, {"status": []}, {"status": "pending"},
+                                     {"status": "complete", "applicability": "Unknown"}])
+def test_invalid_assessment_result_does_not_stop_later_findings(response):
+    report = parse_acunetix_csv(csv_bytes([finding(), finding(CVEList="CVE-2024-5678")]))
+    batch = run_va_batch(report, {finding()["Target"]: "A"}, ASSETS, cloud_consent=True,
+        fetcher=lambda cve: ({**NVD, "cve_id": cve}, "ok"),
+        assessor=lambda nvd, asset, **kwargs: response if nvd["cve_id"] == NVD["cve_id"] else {"status": "needs_verification"})
+    assert [case["status"] for case in batch["cases"]] == ["failed", "needs_verification"]
+    failure = batch["cases"][0]["failures"][0]
+    assert failure == {"stage": "assessment", "error_type": "assessment_failure", "exception_class": "ValueError"}
+
+
+def test_fetch_failure_is_cached_and_does_not_expose_exception_text():
+    report = parse_acunetix_csv(csv_bytes([finding(), finding(Affects="/two")]))
+    fetcher = Mock(side_effect=RuntimeError("api_key=do-not-export"))
+    assessor = Mock()
+    batch = run_va_batch(report, {finding()["Target"]: "A"}, ASSETS, cloud_consent=True,
+                         fetcher=fetcher, assessor=assessor)
+    assert fetcher.call_count == 1
+    assessor.assert_not_called()
+    assert all(case["status"] == "nvd_unavailable" for case in batch["cases"])
+    assert all(case["failures"][0]["exception_class"] == "RuntimeError" for case in batch["cases"])
+    assert "do-not-export" not in str(batch)

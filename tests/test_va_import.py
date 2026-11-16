@@ -72,6 +72,21 @@ def test_invalid_reports_are_rejected(content):
         parse_acunetix_csv(content)
 
 
+def test_field_limit_error_is_distinct_from_bad_quoting():
+    previous_limit = csv.field_size_limit()
+    try:
+        csv.field_size_limit(64)
+        with pytest.raises(ValueError, match="field limit"):
+            parse_acunetix_csv(csv_bytes([finding(Name="x" * 65)]))
+    finally:
+        csv.field_size_limit(previous_limit)
+
+
+def test_bom_only_csv_reports_missing_header():
+    with pytest.raises(ValueError, match="no header"):
+        parse_acunetix_csv(b"\xef\xbb\xbf")
+
+
 def test_false_positive_flag_and_raw_requests_are_not_exported():
     content = csv_bytes([finding(IsFalsePositive="true", Request="Cookie: secret")], HEADERS + ["Request"])
     report = parse_acunetix_csv(content)

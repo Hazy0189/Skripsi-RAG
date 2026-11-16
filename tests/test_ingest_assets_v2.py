@@ -1,4 +1,4 @@
-"""Targeted checks for Asset Schema v2 ChromaDB ingestion (Phase 2A).
+"""Schema v2 ingestion and legacy-collection preservation checks.
 
 Covers: successful ingestion of the seven v2 assets, deterministic
 asset_id-based document IDs, no duplicates after repeated (upsert)
@@ -8,10 +8,12 @@ the original corporate_assets collection is never modified.
 
 Uses a lightweight deterministic embedding stub so no model download is
 needed and the production embedding model stays unchanged. Run:
-python -m pytest test_ingest_assets_v2.py -q
+python -m pytest tests/test_ingest_assets_v2.py -q
 """
 
 import csv
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import pytest
@@ -51,6 +53,22 @@ class DummyEmbeddings:
 
 def expected_ids():
     return [document_id(row["asset_id"]) for row in load_assets(str(V2_CSV))]
+
+
+def test_legacy_ingestion_logs_support_cp1252(monkeypatch):
+    class Console(io.StringIO):
+        def write(self, value):
+            value.encode("cp1252")
+            return super().write(value)
+
+    store = object()
+    monkeypatch.setattr(ingest_assets, "CSV_FILE", str(V1_CSV))
+    monkeypatch.setattr(ingest_assets, "HuggingFaceEmbeddings", lambda **kwargs: DummyEmbeddings())
+    monkeypatch.setattr(ingest_assets.Chroma, "from_documents", lambda **kwargs: store)
+    console = Console()
+    with redirect_stdout(console):
+        assert ingest_assets.ingest_to_chromadb() is store
+    assert "Ingestion selesai" in console.getvalue()
 
 
 def ingest(tmp_path, csv_file=V2_CSV, collection=COLLECTION_NAME_V2):
