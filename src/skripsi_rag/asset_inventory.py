@@ -10,7 +10,7 @@ of Asset Schema v2 and is treated as optional everywhere.
 import json
 from typing import Any, Dict, List, Mapping
 
-from cve_applicability import parse_cpe
+from skripsi_rag.cve_applicability import parse_cpe
 
 SOFTWARE_INVENTORY_FIELD = "software_inventory_json"
 INVENTORY_VERIFIED_FIELD = "inventory_verified"

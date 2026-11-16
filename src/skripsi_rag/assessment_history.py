@@ -34,13 +34,12 @@ class AssessmentRecord:
     modified_vector: str
     retrieval_confidence: Optional[float]
     evidence: Dict[str, Any]
-    # Unique id for reliable deletion (added Phase 4; missing in legacy records).
+    # Older history records may not have an ID.
     id: Optional[str] = None
-    # Phase A: CPE-based applicability (optional for backward compatibility)
+    # Optional fields allow older history records to load.
     applicability: Optional[str] = None
     applicability_explanation: Optional[str] = None
     applicability_evidence: Optional[List[Dict[str, Any]]] = None
-    # Phase C: deterministic organizational priority evidence
     priority_status: Optional[str] = None
     priority_score: Optional[int] = None
     priority_explanation: Optional[str] = None
@@ -74,7 +73,7 @@ def load_history(path: str = HISTORY_PATH) -> List[AssessmentRecord]:
         try:
             records.append(AssessmentRecord(**item))
         except TypeError:
-            # Skip malformed records rather than crashing the history page.
+            # Keep valid history entries when individual records cannot be decoded.
             continue
     return records
 

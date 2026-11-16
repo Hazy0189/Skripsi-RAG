@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 from langchain_chroma import Chroma
 
-import ingest_assets
-from asset_schema_v2 import UNKNOWN, V2_COLUMNS, load_assets
-from ingest_assets import (
+from skripsi_rag import ingest_assets
+from skripsi_rag.asset_schema_v2 import UNKNOWN, V2_COLUMNS, load_assets
+from skripsi_rag.ingest_assets import (
     COLLECTION_NAME,
     COLLECTION_NAME_V2,
     build_v2_document,
@@ -28,8 +28,8 @@ from ingest_assets import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-V1_CSV = ROOT / "asset_data.csv"
-V2_CSV = ROOT / "data" / "asset_data_v2.csv"
+V1_CSV = ROOT / "data" / "examples" / "asset_data_v1.csv"
+V2_CSV = ROOT / "data" / "examples" / "asset_data_v2.csv"
 
 
 class DummyEmbeddings:
@@ -80,9 +80,6 @@ def snapshot(store):
     }
 
 
-# ---------------------------------------------------------------------------
-# 1. Successful ingestion of the seven v2 assets
-# ---------------------------------------------------------------------------
 def test_ingests_seven_assets(tmp_path):
     store = ingest(tmp_path)
     ids = store.get()["ids"]
@@ -120,9 +117,6 @@ def test_document_content_covers_required_sections(tmp_path):
     assert row["description"] in content
 
 
-# ---------------------------------------------------------------------------
-# 2. Stable, deterministic document IDs
-# ---------------------------------------------------------------------------
 def test_document_id_is_deterministic():
     assert document_id("SRV-001") == document_id("SRV-001")
     assert document_id("SRV-001") != document_id("SRV-002")
@@ -157,9 +151,6 @@ def test_ingested_ids_match_deterministic_ids(tmp_path):
     assert set(again.get()["ids"]) == set(expected_ids())
 
 
-# ---------------------------------------------------------------------------
-# 3. Repeated ingestion creates no duplicates (upsert)
-# ---------------------------------------------------------------------------
 def test_rerun_creates_no_duplicates(tmp_path):
     first = ingest(tmp_path)
     first_snapshot = snapshot(first)
@@ -176,9 +167,6 @@ def test_rerun_creates_no_duplicates(tmp_path):
     assert len(reopened.get()["ids"]) == 7
 
 
-# ---------------------------------------------------------------------------
-# 4. Metadata preservation
-# ---------------------------------------------------------------------------
 def test_metadata_preserves_all_schema_v2_fields(tmp_path):
     store = ingest(tmp_path)
     rows = {row["asset_id"]: row for row in load_assets(str(V2_CSV))}
@@ -228,9 +216,6 @@ def test_blank_optional_values_become_unknown(tmp_path):
     assert f"owner {UNKNOWN}" in document.page_content
 
 
-# ---------------------------------------------------------------------------
-# 5. Original corporate_assets collection is not modified
-# ---------------------------------------------------------------------------
 def test_original_collection_not_modified(tmp_path, monkeypatch):
     monkeypatch.setattr(ingest_assets, "CSV_FILE", str(V1_CSV))
     monkeypatch.setattr(ingest_assets, "CHROMA_PERSIST_DIR", str(tmp_path))
@@ -255,9 +240,6 @@ def test_original_collection_not_modified(tmp_path, monkeypatch):
     assert set(before).isdisjoint(v2_ids)
 
 
-# ---------------------------------------------------------------------------
-# 6. Invalid schema handling
-# ---------------------------------------------------------------------------
 def write_invalid_csv(path, header, rows):
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)

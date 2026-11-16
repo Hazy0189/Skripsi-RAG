@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from assessment_history import (
+from skripsi_rag.assessment_history import (
     AssessmentRecord,
     delete_record,
     load_history,

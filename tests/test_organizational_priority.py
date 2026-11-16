@@ -10,8 +10,8 @@ from dataclasses import asdict
 
 import pytest
 
-from cve_applicability import ApplicabilityStatus, ApplicabilityResult
-from organizational_priority import (
+from skripsi_rag.cve_applicability import ApplicabilityStatus, ApplicabilityResult
+from skripsi_rag.organizational_priority import (
     FACTOR_MAX_POINTS,
     MAX_SCORE,
     OrganizationalPriorityResult,

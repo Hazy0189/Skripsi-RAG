@@ -67,16 +67,13 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 MAX_SCORE = 100
 PRIORITY_LEVELS: Tuple[str, ...] = ("P1", "P2", "P3", "P4")
 
-# (minimum_score, priority) evaluated in order; below the last threshold -> P4.
+# Evaluate thresholds top-down; scores below the last threshold map to P4.
 SCORE_THRESHOLDS: Tuple[Tuple[int, str], ...] = ((70, "P1"), (50, "P2"), (30, "P3"))
 
-# CVSS v3.1 qualitative severity rating scale (FIRST), banded from the NVD
-# base score. Used only to bucket an already-computed NVD score - no CVSS
-# math happens in this module.
+# FIRST severity bands bucket the NVD score; this module does not calculate CVSS.
 _SEVERITY_POINTS: Dict[str, int] = {"Critical": 35, "High": 27, "Medium": 14, "Low": 4}
 
-# Asset Schema v2 enum values -> points (weights documented above and in
-# docs/PRIORITY_RUBRIC.md).
+# These legacy weights use Asset Schema v2 category names.
 _BUSINESS_CRITICALITY_POINTS: Dict[str, int] = {
     "Mission Critical": 30,
     "High": 22,
@@ -120,9 +117,9 @@ class RuleContribution:
     """One rubric factor's contribution to the priority score."""
 
     factor: str
-    value: str  # human-readable evidence value used
+    value: str  # Display value rather than the policy point count.
     points: int
-    evidence_source: str  # which field(s) the value came from
+    evidence_source: str  # Asset field or derived exposure rule.
 
 
 @dataclass(frozen=True)
@@ -241,7 +238,6 @@ def calculate_organizational_priority(
     missing_gates: List[str] = []
     score = 0
 
-    # -- Factor 1: vulnerability severity (required; NVD base score banding)
     try:
         numeric_score = float(base_score) if base_score is not None else None
     except (TypeError, ValueError):
@@ -265,7 +261,6 @@ def calculate_organizational_priority(
             "(0.0/None/ di luar rentang 0-10)"
         )
 
-    # -- Factor 2: business criticality (required; Asset Schema v2 enum)
     criticality = _text(ctx.get("business_criticality"))
     if criticality in _BUSINESS_CRITICALITY_POINTS:
         points = _BUSINESS_CRITICALITY_POINTS[criticality]
@@ -284,7 +279,7 @@ def calculate_organizational_priority(
             "business_criticality aset tidak diketahui/tidak valid"
         )
 
-    # -- Factor 3: exposure (required; internet_exposed, zone-derived fallback)
+    # Legacy exposure falls back to network_zone when internet_exposed is unknown.
     exposed = _text(ctx.get("internet_exposed")).lower()
     zone = _text(ctx.get("network_zone"))
     if exposed == _EXPOSURE_YES:
@@ -337,7 +332,6 @@ def calculate_organizational_priority(
             "(internet_exposed dan network_zone tidak diketahui)"
         )
 
-    # -- Factor 4: data sensitivity (optional boost)
     sensitivity = _text(ctx.get("data_sensitivity"))
     if sensitivity in _DATA_SENSITIVITY_POINTS:
         points = _DATA_SENSITIVITY_POINTS[sensitivity]
@@ -353,7 +347,6 @@ def calculate_organizational_priority(
     else:
         unknown_factors.append("data_sensitivity")
 
-    # -- Factor 5: environment (optional boost; production only)
     environment = _text(ctx.get("environment"))
     if environment == "production":
         score += _ENVIRONMENT_PRODUCTION_POINTS
@@ -377,7 +370,7 @@ def calculate_organizational_priority(
     else:
         unknown_factors.append("environment")
 
-    # -- Factor 6: declared CIA baseline (optional; any H -> small boost)
+    # A declared H baseline adds a policy boost, not a CVSS adjustment.
     cia_values = [
         _text(ctx.get(f))
         for f in ("confidentiality_requirement", "integrity_requirement",
@@ -407,7 +400,6 @@ def calculate_organizational_priority(
     else:
         unknown_factors.append("cia_baseline")
 
-    # -- Status & classification
     if missing_gates:
         priority: Optional[str] = None
         status = _STATUS_INCOMPLETE
